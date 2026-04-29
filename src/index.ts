@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import dotenv from 'dotenv';
 import connectDB from './config/db';
 import AuthRouter from './routers/authRouter';
@@ -17,7 +17,7 @@ app.use(cookieParser())
 app.use(express.json())
 
 //test case
-app.get("/", (req, res) => {
+app.get("/", (req:Request, res:Response) => {
     res.send("Hello World")
 })
 
