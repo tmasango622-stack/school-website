@@ -138,3 +138,48 @@ Every new file took 15-20 minutes to type-safe and stabilise. What felt like bru
 The two phase registration system was not planned upfront. It emerged during the build when I realised an open registration flow made no sense for a school environment. Most of the meaningful design decisions happened during implementation, not before it.
 
 TypeScript slowed the build down at the start and made things significantly easier as complexity scaled. That tradeoff is worth it.
+
+
+## Updates
+
+### Rate Limiting
+
+All rate limiting is implemented using custom logic — no third party libraries. Each endpoint has a distinct strategy chosen to match the specific user behavior and risk profile of that endpoint. All limiters track by username as the primary identifier with a fallback to IP address if the username field is empty or absent.
+
+---
+
+#### Login — Token Bucket
+
+Login uses a token bucket with a maximum capacity of 5 tokens. Each login attempt consumes one token. Tokens refill at a rate of 1 token per 30 second cooldown period — not a full refill, a gradual one. This keeps login flexible for legitimate users who fumble their password while making sustained brute force attacks impractical.
+
+An additional measure was added during implementation — the bucket tracks both username and password fields. If either is present in the request it counts against the bucket. This prevents an attack pattern where the username is rotated across attempts to avoid being tracked while the password is held constant or vice versa.
+
+---
+
+#### Permanent Registration — Sliding Window
+
+Registration uses a sliding window that checks requests within the last 5 hours. After 5 failed attempts within that window the user is blocked for the remainder of the 5 hour period.
+
+The 5 hour window is intentional and tied directly to the verification code system. Verification codes expire after 2 hours — meaning by the time the sliding window reopens after a block, any code being targeted has long expired. The window is a security buffer on top of an already expiring credential, not just a standalone limit.
+
+A secondary measure mirrors the login logic — the limiter counts up if either the verification code or the username is present in the request. This closes the gap where a brute force attempt could rotate usernames to avoid being tracked while targeting the same verification code.
+
+The 5 attempt threshold also serves a practical purpose in a school environment. A legitimate user failing registration 5 times is a signal they need technical assistance — not more attempts.
+
+---
+
+#### Temporary Account Generation — Fixed Window
+
+Onboarding uses a fixed window of 1 request per 10 seconds, tracked per username.
+
+The strictness is intentional and serves two purposes. First, it acts as a security buffer against rapid duplicate code generation for the same student account — complementing the existing conflict resolution logic that already rejects older codes in favour of the most recent timestamp. Second, it gives a teacher who submits bad or empty data a forced 10 second pause to correct their input before trying again.
+
+If the username field is empty or missing, the limiter falls back to the IP address and applies the same 10 second window. This means bad data does not escape rate limiting — it just shifts the tracking identifier. A valid username submitted within the same 10 second window still passes through, so a teacher correcting a different field is not penalised unnecessarily.
+
+---
+
+#### Planned Improvements
+
+- Migrate all three custom rate limiting implementations to battle tested libraries once the current logic is fully validated
+- Implement account lockout with admin verification as the resolution path for both security threats and user errors
+- Review and harden all rate limiting configurations during the next backend week
