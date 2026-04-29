@@ -8,7 +8,7 @@
     "dev": "tsx watch src/index.ts"
   },
   "keywords": [],
-  "author": "",
+  "author": "Prince T Masango",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
